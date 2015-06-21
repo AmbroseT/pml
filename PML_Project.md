@@ -18,7 +18,7 @@ Note that the R code for parallel processing has been enabled for this project. 
 
 All code included in this writeup can be viewed in the Rmd file from my [Github link](https://github.com/AmbroseT/pml/blob/gh-pages/PML_Project.Rmd).
 
-This web page statistics^[Using [Evernote](http://www.evernote.com), number of words: 2387, number of characters: 17,868]
+This web page statistics^[Using [Evernote](http://www.evernote.com), number of words: 2421, number of characters: 18,102]
 
 <a id="eo"></a>
 
