@@ -43,30 +43,23 @@ set.seed(123456)
 
 This is the project for the Coursera/ Johns Hopkins Bloomberg School of Public Health course, Practical Machine Learning. It takes source data sets and creates a machine learning algorithm to predict categorical outcomes on a test data set.
 
-Note that R code for parallel processing has been enabled for this project.  The Windows 8.1 machine on which the model was built has a hyper-threaded i7 quad core CPU running boosted at about 3.5GHz, effectively providing 8 logical cores to R Studio.  While enabling parallel processing has significantly reduced training time, it is important to understand that untuned models can still take many hours to complete.  
+Note that the R code for parallel processing has been enabled for this project.  The Windows 8.1 machine on which the model was built has a hyper-threaded i7 quad core CPU running boosted at about 3.5GHz, effectively providing 8 logical cores to R Studio.  While enabling parallel processing has significantly reduced training time, it is important to understand that untuned models can still take many hours to complete.  
 
-All code included in this writeup can be viewed in the Rmd file from my [Github link](https://github.com/AmbroseT/pml/tree/gh-pages).
+All code included in this writeup can be viewed in the Rmd file from my [Github link](https://github.com/AmbroseT/pml/blob/gh-pages/PML_Project.Rmd).
 
-```
-What you should submit
-
-* You should create a report describing how you built your model, 
-* how you used cross validation, 
-* what you think the expected out of sample error is, 
-* and why you made the choices you did. 
-```
+This web page statistics^[Using [Evernote](http://www.evernote.com), number of words: 2387, number of characters: 17,868]
 
 <a id="eo"></a>
 
 ## Executive Summary
 
-This project uses data from accelerometers on the belt, forearm, arm and dumbell of 6 participants.  The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The collected data is split into 2 data set groups; one for training and one for testing. The training data set was used to create a machine learning algorithm that was subsequently applied to the testing data set, predicting the manner in which the participants did the exercise.
+This project uses data from accelerometers on the belt, forearm, arm and dumbell of 6 participants.  The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The collected data is split into 2 data set sources; one for training and one for testing. The training data source was used to create a machine learning algorithm that was subsequently applied to the testing data source, predicting the manner in which the participants did the exercise.
 
 The data for this project come from this source:
 
 http://groupware.les.inf.puc-rio.br/har
 
-Supporting figures for the analysis can be found in the [Appendix](#appendix) section of this report. For convenience throughout the main body of the report, links have been created for easier navigation to the supporting figures in the appendix.
+Supporting figures for this analysis can be found in the [Appendix](#appendix) section of this report. For convenience throughout the main body of the report, links have been created for easier navigation to the supporting figures in the appendix.
 
 
 <a id="dpe"></a>
@@ -114,11 +107,11 @@ newTraining <- trainData[,(names(trainData) %in% tempNames)]
 
 The data downloaded come from two sources over the Internet.  
 
-The training data:
+The training data source:
 
 * https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
 
-The test data:
+The test data source:
 
 * https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
 
@@ -164,66 +157,124 @@ Next, variables have been checked to see if they consist of more than **90%** NA
 
 Once done, all variables except ```classe``` were converted to numeric class. This is done so that the pre-processing and training functions do not fail with errors and warnings.
 
-The names of the remaining variables in the data set were saved into a variable to be used for analysis, and later for part II. You can look at this list of variables in [Figure 3](#fig3).
+The names of the remaining variables in the data set were saved into a variable to be used for analysis, and later for part II. You can look at these selected predictors in [Figure 3](#fig3). There are **`r length(selected.vars)`** predictors.
 
-Now we take the training data source and split it.  It is important to note, in order to assist with reducing training processing time, the training data set (not to be confused with the training data **source**) was given only 25% of the training data source (`r dim(training)[1]` observations and `r dim(training)[2]` variables), leaving 75% for the testing data set (`r dim(testing)[1]` observations and `r dim(testing)[2]` variables).  Rule of thumb for medium to large data set source, you want to split it into 60% for the training, and 40% for the testing. Setting ```trainControl``` paramters also help with reducing time; specifically setting the ```method``` to ```cv``` (cross validation) and setting the ```number``` of subsamples to a smaller number (used 4 for this project).
+Now we take the training data source and split it.  It is important to note, in order to assist with reducing training processing time, the training data set (not to be confused with the training data **source**) was given only 25% of the training data source (`r dim(training)[1]` observations and `r dim(training)[2]` variables), leaving 75% for the testing data set (`r dim(testing)[1]` observations and `r dim(testing)[2]` variables).  Rule of thumb for medium to large data set source, you want to split it into 60% for the training, and 40% for the testing. 
 
-It is also important to note that using Principal Component Analysis (PCA) was previously used to reduce the number of variables; however, it produced a less accurate model (around 77% accuracy).
+
 
 <a id="mla"></a>
 
 ### Exploratory Data Analysis
 
-Now we calculate if any variables contain just NA values.  These variables will be excluded from any calculations; new data sets will be created without these variables. You can see the list of NA variables in [Figure 4](#fig4).
+Keep in mind, the selected predictors used for the model produced a very accurate result and were used as-is. this choice was made in lieu of the time constraints in the scope of this project. However, it should be noted that more refinement can be performed to reduce the selected predictors even further, such as in the following use of ```featurePlot```, increasing accuracy even more.
 
-Calculate highest correlated values for selection. 6 variables were identified, correlated as seen in [Figure 5](#fig5). see [Figure 6](#fig6) for plots.
+We can examine the selected predictors by looking at some sample ```featurePlot``` plots. [Figure 4](#fig4) shows 4 plots created from the first 20 predictors, presented in a 2 x 2 matrix, each plot showing a pairwise plot. These 20 predictors are divided consecutively into these 4 plots. So for example, the top left plot shows a pairwise plot of predictors 1 through 5, ```selected.vars[1:5]```, diagonally labeled from the bottom left to the top right. Looking at all 4 plots, we can see that there are some predictors that are correlated with each other.  
+
+From what we gathered looking at the sample ```featurePlot``` plots, we can calculate what are the highest correlated pairs. We will use a threshold of higher than 0.8 correlation for selection. You can see the results in [Figure 5](#fig5). From this list, 6 variables in particular were identified, paired as:
+
+```
+gyros_arm_y       19  18
+gyros_arm_x       18  19
+
+magnet_arm_x      24  21
+accel_arm_x       21  24
+
+magnet_arm_z      26  25
+magnet_arm_y      25  26
+
+```
+We take a closer look at the above highly correlated predictors with FeaturePlot, see [Figure 6](#fig6). So, with this information, we can further reduce the selected predictors by weighting a combination of these pairs, creating fewer predictors. However, as mentioned, the selected 53 predictors were used as-is.
 
 ```{r}
-## identify highly correlated variables
+## some sample featurePlots: first 20 variables divided in 4 consecutive segments
+p1 <- featurePlot(x = training[, c(selected.vars[1:5])], y = training$classe, plot="pairs")
+p2 <- featurePlot(x = training[, c(selected.vars[6:10])], y = training$classe, plot="pairs")
+p3 <- featurePlot(x = training[, c(selected.vars[11:15])], y = training$classe, plot="pairs")
+p4 <- featurePlot(x = training[, c(selected.vars[16:20])], y = training$classe, plot="pairs")
 
+## note high correlation plot matching calculation
+p5 <- featurePlot(x = training[, c(selected.vars[18:19])], y = training$classe, plot="pairs")
+p6 <- featurePlot(x = training[, c(selected.vars[21:24])], y = training$classe, plot="pairs")
+p7 <- featurePlot(x = training[, c(selected.vars[25:26])], y = training$classe, plot="pairs")
 
 ```
 
 
 ## Machine Learning Algorithm
 
-
+Now that the data sets have been cleaned, a machine learning algorithm was created. Once created, it will be used to make predictions, where the predictions will be assessed for accuracy.
 
 ### Pre-Processing
 
-Now that the data sets have been cleaned, a machine learning algorithm will be created. Once created, it will be used to make predictions, where the predictions will be assessed for accuracy.
+Setting ```trainControl``` parameters also help with reducing time; specifically setting the ```method``` to ```cv``` (cross validation) and setting the ```number``` of subsamples to a smaller number (used 4 for this project). 
 
+```{r}
+## tune the training with trControl / trainControl, selecting
+## cross validation, and number of subsamples to take
+control <- trainControl(method="cv", number=4)
 ```
-* Has the student submitted a github repo?
-* Does the submission build a machine learning algorithm to predict activity quality from activity monitors?
-    + To evaluate the HTML file you may have to download the repo and open the compiled HTML document. 
-    + Alternatively if they have submitted a repo with a gh-pages branch, you may be able to view the HTML page on the web. If the repo is: 
-        + https://github.com/DataScienceSpecialization/courses/tree/master/08_PracticalMachineLearning/001predictionMotivation
-    + then you can view the HTML page here: 
-        + http://datasciencespecialization.github.io/courses/08_PracticalMachineLearning/001predictionMotivation/
-* Do the authors describe what they expect the out of sample error to be and estimate the error appropriately with cross-validation?
-```
+
+It is important to note that an attempt at Principal Component Analysis (PCA) was previously done to reduce the number of variables. PCA created 41 variables; however, it also produced a less accurate model (around 77% accuracy). Needless to say, that pre-processing was discarded and not included in this report.
 
 ### Modeling
 
-```{r modeling}
-## ====================================================================
-## create model using random forests without pre-processing,
-## which was done previously. This can take up to 2 hrs
+Being that the outcome is a categorical variable, we will use Random Forests as the method for building the model. The ```train``` function uses the ```trControl``` attribute with the parameters defined in pre-processing. Random Forests with cross validation evaluates multiple model choices and selects the best fit:
 
+```{r modeling}
+## create model using random forests without pre-processing,
+## the outcome is categorical, therefore random forests is used
+modelFit <- train(classe ~ ., method="rf", trControl = control, data = training, prox = TRUE)
 ```
+
+Inspecting the best fit model shows a **97.1%** accuracy:
 
 ```{r}
-## ====================================================================
-## fit model for accuracy
-
+##  97.1% accuracy, mtry 27
+modelFit  
 ```
+
+We determine the estimated out of sample error rate by examining the final model selected during the model build; in this case, it is estimated at **2.18%**:
+
+```{r}
+## out of sample estimated error rate
+modelFit$finalModel
+```
+
+We evaluate the model against the testing data set and predict for accuracy. The ```confusionMatrix``` validates that not only is the prediction accurate, it is more accurate than than the accuracy of the model built using the training data set, at **98%** accuracy:
+
+```{r}
+## fit model to testing for accuracy, this also identifies the error rates
+confusionMatrix(testing$classe, predict(modelFit, testing[,-53]))
+
+## 97.9% accuracy
+```
+
 
 <a id="conc"></a>
 
 ## Conclusion
 
-Given the specific pre-processing performed on the training data, the same pre-processing must be performed on the testing data before predicting with the created model.  Once all steps have been carefully performed, the next part of this project can be completed.
+The final submission for part II is based on preparing the testing data source in the same way that the testing data source was prepared, which is to apply the selected predictors and dropping the irrelevant variables.
+
+With 97.1% Random Forest Model accuracy, 98% evaluation accuracy, and 2.18% OOB estimated error rate, the prediction for the training data source was calculated. The testing data source R code is provided below:
+
+```
+## 1. remove irrelevant variables 1 - 7 using calculation
+pmlTest <- testData[,(names(testData) %in% tempNames)]
+
+## 2. subset with selected.vars from training
+pmlTest2 <- pmlTest[,(names(pmlTest) %in% selected.vars)]
+
+## 3. convert all variables to num
+loop3 <- dim(pmlTest2)[2]
+for (i in 1:(loop3)) {pmlTest2[,i] <- as.numeric(pmlTest2[,i])}
+
+## prediction for PML testing
+pred <- predict(modelFit, pmlTest2)
+
+```
+This produced 100% correct predictions in Part II, so this validates that using the 53 predictors as-is in this excercise was good enough.
 
 ***
 
@@ -259,7 +310,7 @@ bad.vars
 
 <a id="fig3"></a>
 
-### Figure 3: Selected Variables
+### Figure 3: Selected Predictors
 
 ```{r}
 ## sselected variables
@@ -270,33 +321,35 @@ selected.vars
 
 <a id="fig4"></a>
 
-### Figure 4: ??
+### Figure 4: Sampling of the Training Data Set with featurePlot
 
-```{r}
-## 
-
+```{r fig.height=10, fig.width=10}
+## some sample featurePlots of the training data set
+grid.arrange(p1, p2, p3, p4, nrow = 2, ncol = 2)
 ```
 
 [Preface](#pre) |[Executive Summary](#eo) | [Data Preparation and Exploration](#dpe) | [Machine Learning Algorithm](#mla) | [Conclusion](#conc)
 
 <a id="fig5"></a>
 
-### Figure 5: Highest Correlation Calculation results
+### Figure 5: Variables with Highest Correlation
 
+```{r}
+## identify highly correlated variables, and plot them
+M <- abs(cor(training[, -53]))
+diag(M) <- 0
+which(M > 0.8, arr.ind=T)
 ```
-                 row col
-magnet_belt_z     38  37  
-magnet_belt_y     37  38  
 
-gyros_arm_y       54  53  
-gyros_arm_x       53  54  
+[Preface](#pre) |[Executive Summary](#eo) | [Data Preparation and Exploration](#dpe) | [Machine Learning Algorithm](#mla) | [Conclusion](#conc)
 
-magnet_arm_x      59  56  
-accel_arm_x       56  59  
+<a id="fig6"></a>
 
-magnet_arm_z      61  60  
-magnet_arm_y      60  61  
+### Figure 6: featurePlot of Variables with Highest Correlation
 
+```{r fig.width=11, fig.height=5}
+## note high correlation plot matching calculation
+grid.arrange(p5, p6, p7, nrow = 1)
 ```
 
 [Preface](#pre) |[Executive Summary](#eo) | [Data Preparation and Exploration](#dpe) | [Machine Learning Algorithm](#mla) | [Conclusion](#conc)
