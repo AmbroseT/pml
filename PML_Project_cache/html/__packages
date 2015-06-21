@@ -1,0 +1,13 @@
+base
+knitr
+foreach
+iterators
+doParallel
+lattice
+ggplot2
+caret
+randomForest
+survival
+Formula
+Hmisc
+gridExtra

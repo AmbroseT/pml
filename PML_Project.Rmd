@@ -1,0 +1,302 @@
+---
+title: 'Practical Machine Learning Project, Part I: Writeup'
+author: "Ambrosio Q. Tria"
+output:
+  html_document:
+    highlight: haddock
+    keep_md: yes
+    theme: spacelab
+    toc: yes
+  pdf_document:
+    keep_tex: yes
+    toc: yes
+
+---
+***
+
+```{r setoptions, echo=FALSE}
+## global configs
+library(knitr)
+opts_chunk$set(fig.height=3, fig.width=3, echo=FALSE, cache = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r multiCore}
+## enable multi-core processing
+library(doParallel)
+cl <- makeCluster(detectCores())
+registerDoParallel(cl)
+```
+
+<a id="pre"></a>
+
+## Preface
+
+```{r}
+## load caret library, and other required libraries
+library(lattice); library(ggplot2); library(caret); library(randomForest)
+library(grid); library(survival); library(Hmisc); library(gridExtra)
+
+## set the seed for the project
+set.seed(123456)
+
+```
+
+This is the project for the Coursera/ Johns Hopkins Bloomberg School of Public Health course, Practical Machine Learning. It takes source data sets and creates a machine learning algorithm to predict categorical outcomes on a test data set.
+
+Note that R code for parallel processing has been enabled for this project.  The Windows 8.1 machine on which the model was built has a hyper-threaded i7 quad core CPU running boosted at about 3.5GHz, effectively providing 8 logical cores to R Studio.  While enabling parallel processing has significantly reduced training time, it is important to understand that untuned models can still take many hours to complete.  
+
+All code included in this writeup can be viewed in the Rmd file from my [Github link](https://github.com/AmbroseT/pml/tree/gh-pages).
+
+```
+What you should submit
+
+* You should create a report describing how you built your model, 
+* how you used cross validation, 
+* what you think the expected out of sample error is, 
+* and why you made the choices you did. 
+```
+
+<a id="eo"></a>
+
+## Executive Summary
+
+This project uses data from accelerometers on the belt, forearm, arm and dumbell of 6 participants.  The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The collected data is split into 2 data set groups; one for training and one for testing. The training data set was used to create a machine learning algorithm that was subsequently applied to the testing data set, predicting the manner in which the participants did the exercise.
+
+The data for this project come from this source:
+
+http://groupware.les.inf.puc-rio.br/har
+
+Supporting figures for the analysis can be found in the [Appendix](#appendix) section of this report. For convenience throughout the main body of the report, links have been created for easier navigation to the supporting figures in the appendix.
+
+
+<a id="dpe"></a>
+
+## The Data
+
+Before we can apply a machine algorithm to the data, we download the data, clean and prepare it, then explore it to make it tidy and usable for analysis and modeling calculations.
+
+### Preparation
+
+The data sets for the project, once downloaded, will need to be cleaned up for analysis. Once they have been cleaned, the data sets will be explored and analyzed before processing a machine learning algorithm. 
+
+```{r}
+## download the training data set
+if(!file.exists("training.csv")) {
+  message("downloading file. this may take a minute or so...")
+  fileUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(fileUrl, destfile="training.csv")
+  datedownloaded <- date()
+  
+  } else datedownloaded <- "localCopy"
+  
+## download the testing data set
+if(!file.exists("testing.csv")) {
+  message("downloading file. this may take a minute or so...")
+  fileUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(fileUrl, destfile="testing.csv")
+  datedownloaded <- date()
+  
+  } else datedownloaded2 <- "localCopy"
+
+## read in the data sets, unify NA values
+trainData <- read.csv('training.csv', na.strings=c("NA", "", "#DIV/0!"))
+testData <- read.csv('testing.csv', na.strings=c("NA", "", "#DIV/0!"))
+
+## =========================================================================
+## clean and trim data
+## =========================================================================  !!
+
+## remove irrelevant variables 1 - 7
+tempNames <- names(trainData[8:160])
+newTraining <- trainData[,(names(trainData) %in% tempNames)]
+
+```
+
+The data downloaded come from two sources over the Internet.  
+
+The training data:
+
+* https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data:
+
+* https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The training data source is the data set that will be split into 2 more data sets, one for building the model, and the other to test the accuracy and evaluate the model.
+
+The test data source is the data set used to predict the outcomes with the model built using the training data set, which will be submited to the Part II of this project.
+
+Both data sources were saved, respectively, as **```training.csv```** and **```testing.csv```**. Once saved, they were read with paramaters to convert and unify NA type observations, which are NA values, blank observations, and error values such as ```#DIV/0!```. Finally, irrelevant variables were removed from the data set. The irrelevant variables -- [Figure 1](#fig1) -- are the first 7 variables in the training data set, and have no bearing or significance to the data; in fact, they can skew the modeling and prediction if left in.
+
+```{r}
+## =========================================================================  
+## if there are any variables that consist of more than 90% NA values,
+## then remove them
+
+bad.vars <- NULL
+na.loop <- dim(newTraining)[2]
+for (i in 1:na.loop) {
+  if (sum(is.na(newTraining[i])) / dim(newTraining)[1] > .9 ) bad.vars <- c(bad.vars, names(newTraining[i])) 
+}
+
+## drop these variables
+newTraining2 <- newTraining[,!(names(newTraining) %in% bad.vars)]
+
+## =========================================================================  !!
+## convert all variables to num except classe, training and testing
+loop <- dim(newTraining2)[2]
+for (i in 1:(loop-1)) newTraining2[,i] <- as.numeric(newTraining2[,i])
+
+## =========================================================================  !!
+## resulting variables will be used as the selected variable set
+## use this later
+selected.vars <- names(newTraining2)
+
+## =========================================================================  !!
+## splice data into training and test sets
+inTrain <- createDataPartition(y=newTraining2$classe, p=0.25, list=FALSE)
+training <- newTraining2[inTrain,]
+testing <- newTraining2[-inTrain,]
+
+```
+
+Next, variables have been checked to see if they consist of more than **90%** NA values.  If they do contain more than 90% NA values, then they are removed from the data set. You can look at the names of these variables that have been removed in [Figure 2](#fig2).
+
+Once done, all variables except ```classe``` were converted to numeric class. This is done so that the pre-processing and training functions do not fail with errors and warnings.
+
+The names of the remaining variables in the data set were saved into a variable to be used for analysis, and later for part II. You can look at this list of variables in [Figure 3](#fig3).
+
+Now we take the training data source and split it.  It is important to note, in order to assist with reducing training processing time, the training data set (not to be confused with the training data **source**) was given only 25% of the training data source (`r dim(training)[1]` observations and `r dim(training)[2]` variables), leaving 75% for the testing data set (`r dim(testing)[1]` observations and `r dim(testing)[2]` variables).  Rule of thumb for medium to large data set source, you want to split it into 60% for the training, and 40% for the testing. Setting ```trainControl``` paramters also help with reducing time; specifically setting the ```method``` to ```cv``` (cross validation) and setting the ```number``` of subsamples to a smaller number (used 4 for this project).
+
+It is also important to note that using Principal Component Analysis (PCA) was previously used to reduce the number of variables; however, it produced a less accurate model (around 77% accuracy).
+
+<a id="mla"></a>
+
+### Exploratory Data Analysis
+
+Now we calculate if any variables contain just NA values.  These variables will be excluded from any calculations; new data sets will be created without these variables. You can see the list of NA variables in [Figure 4](#fig4).
+
+Calculate highest correlated values for selection. 6 variables were identified, correlated as seen in [Figure 5](#fig5). see [Figure 6](#fig6) for plots.
+
+```{r}
+## identify highly correlated variables
+
+
+```
+
+
+## Machine Learning Algorithm
+
+
+
+### Pre-Processing
+
+Now that the data sets have been cleaned, a machine learning algorithm will be created. Once created, it will be used to make predictions, where the predictions will be assessed for accuracy.
+
+```
+* Has the student submitted a github repo?
+* Does the submission build a machine learning algorithm to predict activity quality from activity monitors?
+    + To evaluate the HTML file you may have to download the repo and open the compiled HTML document. 
+    + Alternatively if they have submitted a repo with a gh-pages branch, you may be able to view the HTML page on the web. If the repo is: 
+        + https://github.com/DataScienceSpecialization/courses/tree/master/08_PracticalMachineLearning/001predictionMotivation
+    + then you can view the HTML page here: 
+        + http://datasciencespecialization.github.io/courses/08_PracticalMachineLearning/001predictionMotivation/
+* Do the authors describe what they expect the out of sample error to be and estimate the error appropriately with cross-validation?
+```
+
+### Modeling
+
+```{r modeling}
+## ====================================================================
+## create model using random forests without pre-processing,
+## which was done previously. This can take up to 2 hrs
+
+```
+
+```{r}
+## ====================================================================
+## fit model for accuracy
+
+```
+
+<a id="conc"></a>
+
+## Conclusion
+
+Given the specific pre-processing performed on the training data, the same pre-processing must be performed on the testing data before predicting with the created model.  Once all steps have been carefully performed, the next part of this project can be completed.
+
+***
+
+<a id="appendix"></a>
+
+##Appendix
+
+All supporting figures can be found in this appendix. For convenience, links have been created for easier navigation back to the main body of the report. Note that captions for the figures have been left out because of the linked figure titles.
+
+[Preface](#pre) |[Executive Summary](#eo) | [Data Preparation and Exploration](#dpe) | [Machine Learning Algorithm](#mla) | [Conclusion](#conc)
+
+<a id="fig1"></a>
+
+### Figure 1: List of Irrelevant Variables
+
+```{r}
+##
+names(trainData[1:7])
+```
+
+[Preface](#pre) |[Executive Summary](#eo) | [Data Preparation and Exploration](#dpe) | [Machine Learning Algorithm](#mla) | [Conclusion](#conc)
+
+<a id="fig2"></a>
+
+### Figure 2: Variables that have been dropped from the training data set 
+
+```{r}
+## list of removed variable names
+bad.vars
+```
+
+[Preface](#pre) |[Executive Summary](#eo) | [Data Preparation and Exploration](#dpe) | [Machine Learning Algorithm](#mla) | [Conclusion](#conc)
+
+<a id="fig3"></a>
+
+### Figure 3: Selected Variables
+
+```{r}
+## sselected variables
+selected.vars
+```
+
+[Preface](#pre) |[Executive Summary](#eo) | [Data Preparation and Exploration](#dpe) | [Machine Learning Algorithm](#mla) | [Conclusion](#conc)
+
+<a id="fig4"></a>
+
+### Figure 4: ??
+
+```{r}
+## 
+
+```
+
+[Preface](#pre) |[Executive Summary](#eo) | [Data Preparation and Exploration](#dpe) | [Machine Learning Algorithm](#mla) | [Conclusion](#conc)
+
+<a id="fig5"></a>
+
+### Figure 5: Highest Correlation Calculation results
+
+```
+                 row col
+magnet_belt_z     38  37  
+magnet_belt_y     37  38  
+
+gyros_arm_y       54  53  
+gyros_arm_x       53  54  
+
+magnet_arm_x      59  56  
+accel_arm_x       56  59  
+
+magnet_arm_z      61  60  
+magnet_arm_y      60  61  
+
+```
+
+[Preface](#pre) |[Executive Summary](#eo) | [Data Preparation and Exploration](#dpe) | [Machine Learning Algorithm](#mla) | [Conclusion](#conc)
